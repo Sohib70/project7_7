@@ -1,11 +1,14 @@
 from rest_framework import serializers
+from rest_framework.status import HTTP_400_BAD_REQUEST
+from rest_framework.authtoken.models import Token
 from .models import CustomUser
-from django.core.validators import ValidationError
+from rest_framework.validators import ValidationError
 from rest_framework import status
+from django.contrib.auth import authenticate
 
 class RegisterSerilizers(serializers.ModelSerializer):
     password = serializers.CharField(max_length=15)
-    confirm_password = serializers.CharField(max_length=15)
+    confirm_password = serializers.CharField(max_length=15,write_only=True)
     class Meta:
         model = CustomUser
         fields = ['first_name','last_name','username','age','address','password','confirm_password']
@@ -27,7 +30,23 @@ class RegisterSerilizers(serializers.ModelSerializer):
             age=validated_data['age'],
             address=validated_data['address'],
         )
+        token = Token.objects.create(user=user)
         user.set_password(validated_data['password'])
+        user.token = token
         user.save()
-        token = Token.objects.create(user = user)
         return user
+
+class LoginSerializers(serializers.Serializer):
+    username = serializers.CharField(max_length=120)
+    password = serializers.CharField(max_length=100)
+
+    def validate(self, data):
+        if not data['username'] or not data['password']:
+            raise ValidationError({'error':"Login yoki parol no'togri","status":status.HTTP_400_BAD_REQUEST})
+        try:
+            user = authenticate(username = data['username'],password = data['password'])
+            token, _ = Token.objects.get_or_create(user=user)
+        except Exception as e:
+            raise ValidationError({'error':"Login yoki parol no'togri", 'status':HTTP_400_BAD_REQUEST})
+        data['token'] = token.key
+        return data
